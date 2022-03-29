@@ -3,6 +3,8 @@ import os
 import glob
 import shutil
 from pathlib import Path
+import matplotlib.pyplot as plt
+import folium
 
 
 class Point:
@@ -43,10 +45,10 @@ def orientation(p, q, r):
 def convexHull(points, n):
     if n < 3:
         return
-    l = Left_index(points)
+    left = Left_index(points)
 
     hull = []
-    p = l
+    p = left
     q = 0
     while True:
         hull.append(p)
@@ -55,7 +57,7 @@ def convexHull(points, n):
             if orientation(points[p], points[i], points[q]) == 2:
                 q = i
         p = q
-        if p == l:
+        if p == left:
             break
     x = []
     y = []
@@ -80,18 +82,26 @@ def write_in_csv(x, y, input_file):
         ret = reformat_file(input_file)
         src = input_file + '_hull.CSV'
         dest = 'results/' + ret + '_hull.CSV'
+        if os.path.exists(dest):
+            dest = 'results/' + ret + '_v2' + '_hull.CSV'
         shutil.move(src, dest)
 
 
 def eloignement(list_x, point, i):
-    if abs(list_x[i] - point[ancre - 1].x) < 1000 * abs(point[ancre - 1].x - point[ancre - 2].x):
+    if abs(list_x[i] - point[ancre - 1].x) < 100000000 * abs(point[ancre - 1].x - point[ancre - 2].x):
         return True
     return False
 
 
 def search_for_files():
-    result = glob.glob('./*/*.CSV', recursive=True)
+    result = glob.glob('./*/????????.CSV', recursive=True)
     return result
+
+
+def rename(input_path):
+    tail, head = os.path.split(input_path)
+    ret = tail + '/[CONTOURED]_' + head
+    return ret
 
 
 def process_files(fichier):
@@ -100,16 +110,19 @@ def process_files(fichier):
     with open(fichier, newline='') as csvfile:
         pointreader = csv.reader(csvfile, delimiter=',')
         for row in pointreader:
-            list_pts_x.append(row[0])
-            list_pts_y.append(row[1])
+            list_pts_x.append(row[1])
+            list_pts_y.append(row[2])
         list_pts_x = list(map(float, list_pts_x))
         list_pts_y = list(map(float, list_pts_y))
+    dest = rename(fichier)
+    shutil.move(fichier, dest)
     return list_pts_x, list_pts_y
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    os.mkdir('results')
+    if not os.path.exists('results'):
+        os.mkdir('results')
     list_files = search_for_files()
 
     for fichier in list_files:
@@ -141,3 +154,11 @@ if __name__ == '__main__':
             list_pts_y.pop(i)
 
         write_in_csv(x, y, fichier)
+
+        m = folium.Map(location=[49.8153, 6.1296], zoom_start=9.5)
+        folium.Marker([49.8153, 6.1296], popup='points').add_to(m)
+        m.save('carte.html')
+
+        plt.scatter(list_pts_x, list_pts_y, color='blue')
+        plt.plot(x, y, color='pink')
+        plt.show()
