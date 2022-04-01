@@ -1,0 +1,8 @@
+questions :
+- informations sur le relevé
+    - ce qui doit etre visible
+    - récupérable comment ? via le numéro de fichier ?
+    - géré par ce code ou autrement ?
+- les résultats
+    - si doublon de nom de fichier, on garde les deux ou on remplace par le nouveau ?
+    -
