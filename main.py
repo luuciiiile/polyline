@@ -154,13 +154,14 @@ def write_in_csv(x, y, input_file):
             ecrivain.writerow(elt)
 
 
-def eloignement(list_x, point, i):
+def eloignement(list_x, point, i, ancre):
     """
     define if a point is to far from another one
+    :param ancre:
     :param list_x: x coordinates list of points already add to the result
     :param point: list of points to be tested
     :param i: indice where we want to test the point
-    :return: True if the tested point is to far from the other one, False otherwise
+    :return: True if the tested point is too far from the other one, False otherwise
     """
     if abs(list_x[i] - point[ancre - 1].x) < 100000000 * abs(point[ancre - 1].x - point[ancre - 2].x):
         return True
@@ -214,6 +215,31 @@ def process_files(fichier):
 
 
 # Press the green button in the gutter to run the script.
+def clean_cloud(list_pts_x, list_pts_y):
+    n = len(list_pts_x)
+    point = []
+    ancre = 0
+    list_exclusion = ([])
+    #  clean the coordinates by removing the too far points
+    for i in range(0, n):
+        if i > 1:
+            if eloignement(list_pts_x, point, i, ancre):
+                point.append(Point(list_pts_x[i], list_pts_y[i]))
+                ancre += 1
+            else:
+                list_exclusion.append(i)
+        else:
+            point.append(Point(list_pts_x[i], list_pts_y[i]))
+            ancre += 1
+    list_exclusion.sort(reverse=True)
+    # popping out the unwanted points
+    for i in list_exclusion:
+        list_pts_x.pop(i)
+        list_pts_y.pop(i)
+
+    return point, ancre, list_pts_x, list_pts_y
+
+
 if __name__ == '__main__':
     # if the results directory does not exist, create it
     if not os.path.exists('results'):
@@ -225,31 +251,7 @@ if __name__ == '__main__':
     for fichier in list_files:
         #  take the coordinates
         list_pts_x, list_pts_y = process_files(fichier)
-
-        n = len(list_pts_x)
-        point = []
-        ancre = 0
-        list_exclusion = ([])
-
-        #  clean the coordinates by removing the too far points
-        for i in range(0, n):
-            if i > 1:
-                if eloignement(list_pts_x, point, i):
-                    point.append(Point(list_pts_x[i], list_pts_y[i]))
-                    ancre += 1
-                else:
-                    list_exclusion.append(i)
-            else:
-                point.append(Point(list_pts_x[i], list_pts_y[i]))
-                ancre += 1
-        list_exclusion.sort(reverse=True)
-        # popping out the unwanted points
-        for i in list_exclusion:
-            list_pts_x.pop(i)
-            list_pts_y.pop(i)
-
-        # update the length of the list
-        n = ancre
+        point, n, list_pts_x, list_pts_y = clean_cloud(list_pts_x, list_pts_y)
 
         # applies the algorithm on the cleaned list
         x, y = convexHull(point, n)
