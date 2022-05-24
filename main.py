@@ -1,8 +1,7 @@
 import csv
 import os
 import re
-import shutil
-import folium
+from folium import Marker, Map
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -156,8 +155,8 @@ def write_in_csv(x, y, input_file):
 
 def eloignement(list_x, point, i, ancre):
     """
-    define if a point is to far from another one
-    :param ancre:
+    define if a point is too far from another one
+    :param ancre: indice where we are in the tested points
     :param list_x: x coordinates list of points already add to the result
     :param point: list of points to be tested
     :param i: indice where we want to test the point
@@ -176,14 +175,14 @@ def search_for_files():
     list_fichiers = []
     for repertory, sous_repertory, files in os.walk('./test'):
         for name in files:
-            if re.match('[00000000-99999999]', name):
+            if re.match(".+\\.([cC][sS][vV])", name):
                 list_fichiers.append(os.path.join(repertory, name))
     return list_fichiers
 
 
 def rename(input_path):
     """
-    Rename a file, in order to track the files who already have been trated with the jarivs march
+    Rename a file, in order to track the files who already have been processed with the jarivs march
     :param input_path: path to the file
     :return: new path to the file, the original one with '[CONTOURED]_' before the file name
     """
@@ -191,6 +190,15 @@ def rename(input_path):
     ret = tail + '/[CONTOURED]_' + head
     return ret
 
+def rename_old(input_path):
+    """
+    rename a file with [OLD] before
+    :param input_path: path to the file
+    :return: new path to the file, the original one with '[OLD]_' before the file name
+    """
+    tail, head = os.path.split(input_path)
+    ret = tail + '/[OLD]_' + head
+    return ret
 
 def process_files(fichier):
     """
@@ -202,20 +210,37 @@ def process_files(fichier):
     list_pts_y = ([])
     with open(fichier, newline='') as csvfile:
         pointreader = csv.reader(csvfile, delimiter=',')
-        for row in pointreader:
-            list_pts_x.append(row[1])
-            list_pts_y.append(row[2])
-        list_pts_x = list(map(float, list_pts_x))
-        list_pts_y = list(map(float, list_pts_y))
+        try:
+            for row in pointreader:
+                list_pts_x.append(row[1])
+                list_pts_y.append(row[2])
+            list_pts_x = list(map(float, list_pts_x))
+            list_pts_y = list(map(float, list_pts_y))
+        except IndexError:
+            print("not a csv file")
+            return list_pts_x, list_pts_y
+        except ValueError:
+            print("smt wrong with the csv...")
+            list_pts_x = ([])
+            list_pts_y = ([])
+            return list_pts_x, list_pts_y
     # rename the file who is going to be processed
-    dest = rename(fichier)
-    shutil.move(fichier, dest)
+    # dest = rename(fichier)
+    # shutil.move(fichier, dest)
 
     return list_pts_x, list_pts_y
 
 
 # Press the green button in the gutter to run the script.
 def clean_cloud(list_pts_x, list_pts_y):
+    """
+    this function will remove some useless points of the cloud. The less point we have to process, the faster
+    the run will be
+    :param list_pts_x: list of the x coordinates
+    :param list_pts_y: list of the y coordinates
+    :return: point the list of the remaining x and y coordinates, ancre the length of the cleaned list,
+    the lists of the remaining coordinates
+    """
     n = len(list_pts_x)
     point = []
     ancre = 0
@@ -240,38 +265,98 @@ def clean_cloud(list_pts_x, list_pts_y):
     return point, ancre, list_pts_x, list_pts_y
 
 
+def add_in_csv(x, y, resultats):
+    ecrivain = csv.writer(resultats)
+    pointreader = csv.reader(resultats, delimiter=',')
+    if os.path.getsize('results.csv') != 0:
+        for element in range(len(x)):
+            elt = [x[element], y[element]]
+            ecrivain.writerow(elt)
+    else:
+        print("coucou")
+        with open('tmp', 'w+', newline='') as tmp:
+            pointreader2 = csv.reader(tmp, delimiter=',')
+            ecrivain2 = csv.writer(tmp)
+            for row in pointreader:
+                line = ([])
+                for i in range(len(row)):
+                    print(row[i])
+                    line.append(row[i])
+                    line.append(x[i])
+                    line.append(y[i])
+                ecrivain2.writerow(line)
+            for rows in pointreader2:
+                ecrivain.writerow(rows)
+
+
 if __name__ == '__main__':
+    non_traites = ([])
+    resultats = open('results.csv', 'w+', newline='')
     # if the results directory does not exist, create it
     if not os.path.exists('results'):
         os.mkdir('results')
     # list of all the files who going to be processed
     list_files = search_for_files()
 
+    to_plot_x = []
+    to_plot_y = []
     # iterate on all the list_file list
     for fichier in list_files:
         #  take the coordinates
-        list_pts_x, list_pts_y = process_files(fichier)
-        point, n, list_pts_x, list_pts_y = clean_cloud(list_pts_x, list_pts_y)
+        print("current file :", fichier)
+        list_pts_xs, list_pts_ys = process_files(fichier)
+        # clean the cloud, because we don't need all the points. The analysis will be faster with a smaller cloud
+        points, n, list_pts_x, list_pts_y = clean_cloud(list_pts_xs, list_pts_ys)
 
         # applies the algorithm on the cleaned list
-        x, y = convexHull(point, n)
+        if n < 3:
+            non_traites.append(fichier)
+            print("not enougth points, skipping...")
+            continue
+        x, y = convexHull(points, n)
 
-        # add the first points at the end, so we have a complete polygon when plot it
+        # add the first points at the end, so we have a complete polygon when plotting it
         x.append(x[0])
         y.append(y[0])
 
+        to_plot_x.append(x)
+        to_plot_y.append(y)
+
         # add the result coordinates to a new csv file in the result directory
         write_in_csv(x, y, fichier)
+        add_in_csv(x, y, resultats)
+
 
         # plot the points in a map
         # /!\ WIP - Doesn't work yet T-T
-        m = folium.Map(location=[49.8153, 6.1296], zoom_start=9.5)
-        folium.Marker([49.8153, 6.1296], popup='point').add_to(m)
-        folium.Marker([49.8153, 5.1296], popup='point2').add_to(m)
-        folium.Marker([49.8153, 7.1296], popup='point2').add_to(m)
+        m = Map(location=[49.8153, 6.670], zoom_start=9.5)
+        Marker([49.85012, 6.78290], popup='hello').add_to(m)
+        Marker([49.8153, 6.1296], popup='point2').add_to(m)
+        Marker([49.8153, 7.1296], popup='point3').add_to(m)
         m.save('carte.html')
 
         # plot the points and their result with matplotlib
-        plt.scatter(list_pts_x, list_pts_y, color='blue')
-        plt.plot(x, y, color='pink')
-        plt.show()
+        # plt.scatter(list_pts_x, list_pts_y, color='blue')
+        name = get_name(fichier)
+        plt.plot(x, y, label="courbe " + name)
+        # plt.legend()
+        # plt.show()
+    if len(non_traites) == 0:
+        print("tous les fichiers ont été traités !")
+    else:
+        print("ces fichiers n'ont pas été traités, par manque de points ou synthaxe incorrecte.")
+        for fichier in non_traites:
+            print(fichier)
+
+    resultats.close()
+    axes = plt.gca()
+    axes.set_xlim(45000, 100000)
+    axes.set_ylim(55000, 110000)
+    plt.show()
+"""
+    for i in range(len(to_plot_x)):
+        tmpx = to_plot_x[i]
+        tmpy = to_plot_y[i]
+        plt.plot(tmpx, tmpy)
+    plt.show()
+"""
