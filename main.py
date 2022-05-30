@@ -1,7 +1,6 @@
 import csv
 import os
 import re
-from folium import Marker, Map
 import matplotlib.pyplot as plt
 from pathlib import Path
 
@@ -173,7 +172,7 @@ def search_for_files():
     :return: a list of paths of all the files who match the syntax [00000000-99999999]
     """
     list_fichiers = []
-    for repertory, sous_repertory, files in os.walk('./test'):
+    for repertory, sous_repertory, files in os.walk('.'):
         for name in files:
             if re.match(".+\\.([cC][sS][vV])", name):
                 list_fichiers.append(os.path.join(repertory, name))
@@ -265,28 +264,17 @@ def clean_cloud(list_pts_x, list_pts_y):
     return point, ancre, list_pts_x, list_pts_y
 
 
-def add_in_csv(x, y, resultats):
+def add_in_csv(x, y, resultats, fichier):
+    name = get_name(fichier)
     ecrivain = csv.writer(resultats)
-    pointreader = csv.reader(resultats, delimiter=',')
-    if os.path.getsize('results.csv') != 0:
-        for element in range(len(x)):
-            elt = [x[element], y[element]]
-            ecrivain.writerow(elt)
-    else:
-        print("coucou")
-        with open('tmp', 'w+', newline='') as tmp:
-            pointreader2 = csv.reader(tmp, delimiter=',')
-            ecrivain2 = csv.writer(tmp)
-            for row in pointreader:
-                line = ([])
-                for i in range(len(row)):
-                    print(row[i])
-                    line.append(row[i])
-                    line.append(x[i])
-                    line.append(y[i])
-                ecrivain2.writerow(line)
-            for rows in pointreader2:
-                ecrivain.writerow(rows)
+    for element in range(len(x)):
+        elt = [x[element], y[element], "fichier:" + name]
+        ecrivain.writerow(elt)
+
+
+def get_code(chemin):
+    chem = os.path.normpath(chemin).split(os.path.sep)
+    return chem[0]
 
 
 if __name__ == '__main__':
@@ -303,7 +291,7 @@ if __name__ == '__main__':
     # iterate on all the list_file list
     for fichier in list_files:
         #  take the coordinates
-        print("current file :", fichier)
+        #print("current file :", fichier)
         list_pts_xs, list_pts_ys = process_files(fichier)
         # clean the cloud, because we don't need all the points. The analysis will be faster with a smaller cloud
         points, n, list_pts_x, list_pts_y = clean_cloud(list_pts_xs, list_pts_ys)
@@ -311,7 +299,7 @@ if __name__ == '__main__':
         # applies the algorithm on the cleaned list
         if n < 3:
             non_traites.append(fichier)
-            print("not enougth points, skipping...")
+            #print("not enougth points, skipping...")
             continue
         x, y = convexHull(points, n)
 
@@ -324,16 +312,8 @@ if __name__ == '__main__':
 
         # add the result coordinates to a new csv file in the result directory
         write_in_csv(x, y, fichier)
-        add_in_csv(x, y, resultats)
+        add_in_csv(x, y, resultats, get_code(fichier))
 
-
-        # plot the points in a map
-        # /!\ WIP - Doesn't work yet T-T
-        m = Map(location=[49.8153, 6.670], zoom_start=9.5)
-        Marker([49.85012, 6.78290], popup='hello').add_to(m)
-        Marker([49.8153, 6.1296], popup='point2').add_to(m)
-        Marker([49.8153, 7.1296], popup='point3').add_to(m)
-        m.save('carte.html')
 
         # plot the points and their result with matplotlib
         # plt.scatter(list_pts_x, list_pts_y, color='blue')
@@ -353,10 +333,4 @@ if __name__ == '__main__':
     axes.set_xlim(45000, 100000)
     axes.set_ylim(55000, 110000)
     plt.show()
-"""
-    for i in range(len(to_plot_x)):
-        tmpx = to_plot_x[i]
-        tmpy = to_plot_y[i]
-        plt.plot(tmpx, tmpy)
-    plt.show()
-"""
+
