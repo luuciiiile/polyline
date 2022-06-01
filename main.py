@@ -169,7 +169,7 @@ def eloignement(list_x, point, i, ancre):
 def search_for_files():
     """
     search recursively for all the files in the current directory
-    :return: a list of paths of all the files who match the syntax [00000000-99999999]
+    :return: a list of paths of all the csv files
     """
     list_fichiers = []
     for repertory, sous_repertory, files in os.walk('.'):
@@ -189,6 +189,7 @@ def rename(input_path):
     ret = tail + '/[CONTOURED]_' + head
     return ret
 
+
 def rename_old(input_path):
     """
     rename a file with [OLD] before
@@ -198,6 +199,7 @@ def rename_old(input_path):
     tail, head = os.path.split(input_path)
     ret = tail + '/[OLD]_' + head
     return ret
+
 
 def process_files(fichier):
     """
@@ -264,15 +266,29 @@ def clean_cloud(list_pts_x, list_pts_y):
     return point, ancre, list_pts_x, list_pts_y
 
 
-def add_in_csv(x, y, resultats, fichier):
-    name = get_name(fichier)
+def add_in_csv(x, y, resultats, code):
+    """
+    add the x and y coordinates at the end of the results file, with the name of the directory as code
+    :param x: x coordinates
+    :param y: y coordinates
+    :param resultats: results file
+    :param fichier: code of the file
+    :return: nothing
+    """
+    # Isolate the file name
+    # name = get_name(code)
     ecrivain = csv.writer(resultats)
     for element in range(len(x)):
-        elt = [x[element], y[element], "fichier:" + name]
+        elt = [x[element], y[element], code]
         ecrivain.writerow(elt)
 
 
 def get_code(chemin):
+    """
+    get the code, with the highest directory name
+    :param chemin: path to the file
+    :return: the code number
+    """
     chem = os.path.normpath(chemin).split(os.path.sep)
     return chem[0]
 
@@ -291,7 +307,7 @@ if __name__ == '__main__':
     # iterate on all the list_file list
     for fichier in list_files:
         #  take the coordinates
-        #print("current file :", fichier)
+        # print("current file :", fichier)
         list_pts_xs, list_pts_ys = process_files(fichier)
         # clean the cloud, because we don't need all the points. The analysis will be faster with a smaller cloud
         points, n, list_pts_x, list_pts_y = clean_cloud(list_pts_xs, list_pts_ys)
@@ -299,7 +315,7 @@ if __name__ == '__main__':
         # applies the algorithm on the cleaned list
         if n < 3:
             non_traites.append(fichier)
-            #print("not enougth points, skipping...")
+            # print("not enougth points, skipping...")
             continue
         x, y = convexHull(points, n)
 
@@ -312,15 +328,18 @@ if __name__ == '__main__':
 
         # add the result coordinates to a new csv file in the result directory
         write_in_csv(x, y, fichier)
+        # add the coordinates at the end of the results file, with the project code in the third column
         add_in_csv(x, y, resultats, get_code(fichier))
 
-
+        # --- can be removed START ---
         # plot the points and their result with matplotlib
         # plt.scatter(list_pts_x, list_pts_y, color='blue')
         name = get_name(fichier)
         plt.plot(x, y, label="courbe " + name)
         # plt.legend()
         # plt.show()
+        # --- END ---
+
     if len(non_traites) == 0:
         print("tous les fichiers ont été traités !")
     else:
@@ -329,8 +348,9 @@ if __name__ == '__main__':
             print(fichier)
 
     resultats.close()
+    # --- can be removed START ---
     axes = plt.gca()
     axes.set_xlim(45000, 100000)
     axes.set_ylim(55000, 110000)
     plt.show()
-
+    # --- END ---
