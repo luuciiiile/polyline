@@ -436,9 +436,9 @@ def handle_csv(res):
 
 if __name__ == '__main__':
     resultats = open('results.csv', 'w+', newline='')
-    # handle_photo(resultats)
+    handle_photo(resultats)
     # get_coordinates_photo('photos/DJI_20220323125044_0001.JPG')
-    handle_csv(resultats)
+    # handle_csv(resultats)
     resultats.close()
 
     """non_traites = ([])
