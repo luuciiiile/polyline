@@ -3,6 +3,9 @@ import os
 import re
 import matplotlib.pyplot as plt
 from pathlib import Path
+import PIL
+from exif import Image
+from PIL.ExifTags import TAGS, GPSTAGS
 
 
 # class Point, with x and y as the 2 coordinates
@@ -30,8 +33,8 @@ def Left_index(points):
 
 def is_in_list(test_list, x, y):
     """
-    Usefull function in order to know if a point is in the list
-    :param test_list: the loste we are looking in
+    Useful function in order to know if a point is in the list
+    :param test_list: the list we are looking in
     :param x: x coordinate of the point
     :param y: y coordinate of the point
     :return: True if the point(x, y) is in test_list, False otherwise
@@ -114,7 +117,7 @@ def convexHull(points, n):
 
 def get_name(input_path):
     """
-    helpfull function who get and return the file name
+    helpful function who get and return the file name
     :param input_path: path of the file
     :return: the name of the file, without the extension
     ex :
@@ -181,7 +184,7 @@ def search_for_files():
 
 def rename(input_path):
     """
-    Rename a file, in order to track the files who already have been processed with the jarivs march
+    Rename a file, in order to track the files who already have been processed with the jarvis march
     :param input_path: path to the file
     :return: new path to the file, the original one with '[CONTOURED]_' before the file name
     """
@@ -251,6 +254,7 @@ def clean_cloud(list_pts_x, list_pts_y):
         if i > 1:
             if eloignement(list_pts_x, point, i, ancre):
                 point.append(Point(list_pts_x[i], list_pts_y[i]))
+                print("point: ", point)
                 ancre += 1
             else:
                 list_exclusion.append(i)
@@ -272,10 +276,10 @@ def add_in_csv(x, y, resultats, code):
     :param x: x coordinates
     :param y: y coordinates
     :param resultats: results file
-    :param fichier: code of the file
+    :param code: code of the file
     :return: nothing
     """
-    # Isolate the file name
+    # Isolate the filename
     # name = get_name(code)
     ecrivain = csv.writer(resultats)
     for element in range(len(x)):
@@ -293,8 +297,151 @@ def get_code(chemin):
     return chem[0]
 
 
-if __name__ == '__main__':
+def get_coordinates_photo(photo):
+    lat = 0
+    long = 0
+    with open(photo, 'rb') as im_file:
+        my_im = Image(im_file)
+        if my_im.has_exif:
+            lat = my_im.gps_latitude
+            lat_ref = my_im.gps_latitude_ref
+            long = my_im.gps_longitude
+            long_ref = my_im.gps_longitude_ref
+    return lat, lat_ref, long, long_ref
+
+
+def convert_gps(lat, lat_ref, long, long_ref):
+    """
+    convert DMS format GPS coordinates by decimal GPS format
+    :param lat: latitude in DMS
+    :param lat_ref: N/W/S/E
+    :param long: longitude in DMS
+    :param long_ref: N/W/S/E
+    :return:
+    """
+    x = lat[0] + (lat[1] / 60) + (lat[2] / 3600)
+    y = long[0] + (long[1] / 60) + (long[2] / 60)
+    if lat_ref == 'S' or lat_ref == 'W':
+        if long_ref == 'S' or long_ref == 'W':
+            return -x, -y
+        return -x, y
+    elif long_ref == 'S' or long_ref == 'W':
+        return x, -y
+    else:
+        return x, y
+
+
+def list_gps_coordinates(list_files):
+    coordinates_x = [()]
+    coordinates_y = [()]
+    for file in list_files:
+        lat, lat_ref, long, long_ref = get_coordinates_photo(file)
+        x, y = convert_gps(lat, lat_ref, long, long_ref)
+        coordinates_x.append(x)
+        coordinates_y.append(y)
+    coordinates_x = list(map(float, coordinates_x))
+    coordinates_y = list(map(float, coordinates_y))
+    return coordinates_x, coordinates_y
+
+
+def get_photo():
+    list_fichiers = []
+    for repertory, sous_repertory, files in os.walk('.'):
+        for name in files:
+            if re.match(".+\\.([jJ][pP][gG])", name):
+                list_fichiers.append(os.path.join(repertory, name))
+    return list_fichiers
+
+
+def get_index(list_fichiers):
+    index = 0
+    list_index = []
+    ref = get_code(list_fichiers[0])
+    for fichier in list_fichiers:
+        code = get_code(fichier)
+        if code != ref:
+            ref = code
+            list_index.append(index)
+        index += 1
+    return list_index
+
+
+def handle_photo(res):
+    """
+
+    :param res:
+    :return:
+    """
+    photos = get_photo()
+    list_index = get_index(photos)
+    list_pts = []
+    prev = 0
+    if len(list_index) == 0:
+        xs, ys = list_gps_coordinates(photos)
+        list_pts = clean_cloud(xs, ys)
+        x, y = convexHull(list_pts, len(list_pts))
+        x.append(x[0])
+        y.append(y[0])
+        add_in_csv(x, y, res, get_code(photos))
+        print("added in csv, withe the code : ", get_code(photos[prev]))
+    else:
+        for i in list_index:
+            print("coucou")
+            list_pts = list_gps_coordinates(photos[prev:i])
+            x, y = convexHull(list_pts, len(list_pts))
+            x.append(x[0])
+            y.append(y[0])
+            add_in_csv(x, y, res, get_code(photos[prev]))
+            print("added in csv, withe the code : ", get_code(photos[prev]))
+            prev = i
+        list_pts.append(list_gps_coordinates(photos[prev:]))
+
+
+def handle_csv(res):
+    """
+
+    :param res:
+    :return:
+    """
     non_traites = ([])
+    # list of all the files who going to be processed
+    list_files = search_for_files()
+    # iterate on all the list_file list
+    for fichier in list_files:
+        #  take the coordinates
+        # print("current file :", fichier)
+        list_pts_xs, list_pts_ys = process_files(fichier)
+        # clean the cloud, because we don't need all the points. The analysis will be faster with a smaller cloud
+        points, n, list_pts_x, list_pts_y = clean_cloud(list_pts_xs, list_pts_ys)
+
+        # applies the algorithm on the cleaned list
+        if n < 3:
+            non_traites.append(fichier)
+            # print("not enough points, skipping...")
+            continue
+        x, y = convexHull(points, n)
+
+        # add the first points at the end, so we have a complete polygon when plotting it
+        x.append(x[0])
+        y.append(y[0])
+        # add the coordinates at the end of the results file, with the project code in the third column
+        add_in_csv(x, y, resultats, get_code(fichier))
+    if len(non_traites) == 0:
+        print("tous les fichiers ont été traités !")
+    else:
+        print("ces fichiers n'ont pas été traités, par manque de points ou synthaxe incorrecte.")
+        for fichier in non_traites:
+            print(fichier)
+
+
+if __name__ == '__main__':
+    resultats = open('results.csv', 'w+', newline='')
+    # handle_photo(resultats)
+    # get_coordinates_photo('photos/DJI_20220323125044_0001.JPG')
+    handle_csv(resultats)
+    resultats.close()
+
+    """non_traites = ([])
     resultats = open('results.csv', 'w+', newline='')
     # if the results directory does not exist, create it
     if not os.path.exists('results'):
@@ -315,13 +462,14 @@ if __name__ == '__main__':
         # applies the algorithm on the cleaned list
         if n < 3:
             non_traites.append(fichier)
-            # print("not enougth points, skipping...")
+            # print("not enough points, skipping...")
             continue
         x, y = convexHull(points, n)
 
         # add the first points at the end, so we have a complete polygon when plotting it
         x.append(x[0])
         y.append(y[0])
+
 
         to_plot_x.append(x)
         to_plot_y.append(y)
@@ -353,4 +501,4 @@ if __name__ == '__main__':
     axes.set_xlim(45000, 100000)
     axes.set_ylim(55000, 110000)
     plt.show()
-    # --- END ---
+    # --- END ---"""
